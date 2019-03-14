@@ -1,0 +1,713 @@
+# Caida Data Analysis by Jeffrey Hsieh
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(reshape2)
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(tidyr)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Load the Data
+data <- read.csv("equinix-chicago.dirA.20160406-130000.UTC.df.txt", sep="",
+                 comment.char = ';')
+```
+
+Center for Applied Internet Data Analysis (CAIDA) has been gathering and providing data of Internet for scentific research community. In this project, one publically available data, [Trace Statistics for CAIDA Passive OC48 and OC192 Traces](http://www.caida.org/data/passive/trace_stats/) was gather and studied.
+
+
+# Univariate Plots Section
+
+The data is a space separated text files with some comments. After read into data frame, it was found to have the following columns.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+names(data)
+
+```
+
+The dataset consists of 18 variables.
+
+Let's look at five samples of the data.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sample_n(data, 5)
+```
+
+Semantically, SIZE is different from other variables. It refers to size of a packet, while all other variables refer to the type of a packet.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=data)  +
+  geom_histogram( aes(SIZE), binwidth=1)
+```
+The SIZE is quite uniform. Between close to 0 and 1500, the count is 1. This implies the almost all types of different size of packets did appear. Let's look at the minimal 10 and maximal 10 of the size.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+head(data$SIZE, 10)
+tail(data$SIZE, 10)
+```
+
+The minimal SIZE is 21. The uniform behavior does not show up when SIZE is beyond 1500. They only show up sparsely and has a very outlier value of 4003.
+
+Now check the distribution of all the other "type" variables.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot( gather( subset(data, select=-c(SIZE))), aes(value)) +
+  geom_histogram() +
+  facet_wrap(~key)
+```
+
+Linear scale does high concentration on low value and might be some outler of large value. Let's look at log scale.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot( gather( subset(data, select=-c(SIZE))), aes(value)) +
+  geom_histogram() +
+  scale_x_log10() +
+  facet_wrap(~key)
+```
+In terms of amount of data, TCP, TCP.1, UDP, UDP.1, X.IPv4., X.IPv6. appear to have more abundant data compared to the other types. Suggesting we can look at these variables first in the following analysis.
+
+
+# Univariate Analysis
+
+- The SIZE variable appears to be unique in that it has a very uniform distribution, 1 or 0 in all value. The value of SIZE starts from 21 to 4003. However, once it reaches 1500, its distribution is way more sparse. This is corresponding that in nowaday, the majority of Internet transport is based on Ethernet, whose native version has size limit of 1500. New enhancement allows size beyond 1500 but usage appear to be rare according to this dataset.
+- The distribution of other *packet type* variables is more toward log scale. Our future investigation should take note on this.
+
+
+
+# Bivariate Plots Section
+
+Given that SIZE is quite different from all others, and semantically we know it is about packet size, while all other variables are about packet types. The relationship to explore likely will be between SIZE and the rest of the 17 variable.
+
+Let's choose the first two variables to see how they look like.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=data)  +
+  geom_point( aes(x=SIZE, y=X.IPv4.) )
+```
+
+The first pair of variables show small count of outliers in normal scale and make the main structure of the data difficult to examine.
+
+Also, the data appear to be concentrated so transparency should be used.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=data)  +
+  geom_point( aes(x=SIZE, y=X.IPv4.), alpha=1/5 ) +
+  scale_y_log10()
+```
+
+With log10 scale on the packet counts "X.IPv4." and alpha of 1/5 applied, the main structure of the dataset is much easier to comprehend.
+
+Packet size also has outlier beyond value of 1500 and even so beyond 2000.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data, SIZE<2000))  +
+  geom_point( aes(x=SIZE, y=X.IPv4.), alpha=1/5 ) +
+  scale_y_log10()
+```
+
+Eliminated data where size is more than 2000 gives better zoom in for the distribution. Now this looks like a slight negative correlation.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data, SIZE<2000))  +
+  geom_point( aes(x=SIZE, y=X.IPv4.), alpha=1/5 ) +
+  scale_y_log10() +
+  geom_smooth( aes(x=SIZE, y=X.IPv4.), method='lm', color='red')
+```
+
+Linear regression gives better view of that negative correlation.
+
+
+Now we choose another variable X.IPv6.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data, SIZE<2000))  +
+  geom_point( aes(x=SIZE, y=X.IPv6.), alpha=1/5 ) +
+  scale_y_log10() +
+  geom_smooth( aes(x=SIZE, y=X.IPv6.), method='lm', color='red')
+```
+
+"X.IPv6." shows similar slight negative correlation to Size.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data, SIZE<2000))  +
+  geom_point( aes(x=SIZE, y=X.IPv6t.), alpha=1/5 ) +
+  scale_y_log10() +
+  geom_smooth( aes(x=SIZE, y=X.IPv6t.), method='lm', color='red')
+```
+
+Same negative correlation for IPv6t (IPv6 Tunneled) packets.
+
+Previous we eliminated some data when SIZE is larger than 2000. Is there a way to get also good visualization but without cutting data?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=data)  +
+  geom_point( aes(x=SIZE, y=X.IPv4.), alpha=1/5 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=X.IPv4.), method='lm', color='red')
+```
+
+Instead of cutting outliers for data with SIZE more than 2000, use log10 scale on SIZE also gives good visualization. This should be preferred method we don't know yet if cutting data will cut off important information at this moment.
+
+Let's do the same log10 instead of cutting for the other two examples examined above.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=data)  +
+  geom_point( aes(x=SIZE, y=X.IPv6.), alpha=1/5 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=X.IPv6.), method='lm', color='red')
+```
+
+Good. IPv6 can be visualized well using log10 instead of cutting.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=data)  +
+  geom_point( aes(x=SIZE, y=X.IPv6t.), alpha=1/5 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=X.IPv6t.), method='lm', color='red')
+```
+
+Same as IPv6t.
+
+Now let's look at all varaibles to determine how we want to examine all of them.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(data)
+```
+
+Certain types of packets dominate. Some types of packet has very small amount of counts.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+colSums(data)
+```
+
+Summing up the packet counts across different SIZE confirm the domination of certain protocols. For eample, X.IPv4., UDP, TCP, X.IPv6., UDP.1, TCP.1. have way larger values than others.
+
+
+# Bivariate Analysis
+
+The data consists of 18 variables. The first variable "SIZE" is the size of packet and is used as index. Observing the first variable "X.IPv4." found two characteristics:
+
+- The value of "X.IPv4.", e.g., the count of IPv4 packets for each packet size has some extreme high value outliers. Using log scale of y axis, "X.IPv4.", is more suitable to observe the distribution.
+- The "SIZE" also has small amout of outlier beyond 1500, even fewer when exceeding 2000. This is because majority of underlying transport technology of Internet is Ethernet, which has a standard payload size of 1500. Although newer technology allows for larger payload, they are relatively rare. Hence limit the data to those with SIZE less than 2000 provide better insight into the data.
+- Another way to deal with the outliers of SIZE is use log scale for x axis, SIZE, as well. The resulting virtualization show similar good observability as the eliminating method above. This method should be preferred as this does not cause any loss of data.
+
+With above modification and add a linear regression, there appears to be a negative correlation between the size and amount of packet for IPv4.
+
+Doing the same virtualization on IPv6 "X.IPv6."a nd IPv6 Tunnel ""X.IPv6t." also show similar negative correlation. The amount of packets appear to be IPv4 leading, IPv6 second, and IPv6 Tunnel only has very small amount. This is inlne with the landscape of Internet as IPv4 is the primary protocol used, while IPv6 is the new protocol but the transition is still happening. IPv6 Tunnel is a temporary technology used during transition period only.
+
+Further observation found that although the data supplied 18 variables, the data is not tidy. Each column represent type of packet. Melt the type into a variable will allow analysis easier between type. Further, the types of packets are under three groups.
+
+- IPv4 group:
+    - X.IPv4.: the total amount of IPv4 packets
+    - SCTP: amount of IPv4's SCTP packets
+    - IPv6: amount of IPv4 packets that carry IPv6 as payload.
+    - ESP: amount of IPv4's ESP packets
+    - UDP: amount of IPv4's UDP packets
+    - GRE: amount of IPv4's GRE packets
+    - ICMP: amount of IPv4's ICMP packets
+    - TCP: amount of IPv4's TCP packets
+    - UKNOWN
+- IPv6 group:
+    - X.IPv6.: the total amount of IPv6 packets
+    - ICMP6: amount of IPv6's ICMP6 packets
+    - UDP.1: amount of IPv6's UDP packets
+    - TCP.1: amount of IPv6's TCP packets
+- IPv6 Tunnel group:
+    - X.IPv6t.: the total amount of IPv6 Tunnel packets
+    - ICMP6.1: amount of IPv6 Tunnel's ICMP6 packets
+    - UDP.2: amount of IPv6 Tunnel's UDP packets
+    - TCP.2: amount of IPv6 Tunnel's TCP packets
+
+ICMP, UDP, TCP are the most important upper layer protocols for all types of IP packets. Other protocols like SCTP, ESP, GRE only has data in IPv4 group, and are not as important, as evidence by their total amount of packets compared to the amounts of ICMP, UDP, TCP's. Comparison focus on ICMP, UDP, TCP, as well as total within each group should provide better insight.
+
+
+# Bivariate Plots Section (continued)
+
+The data was wrangled to has new two new categorical variables. These two categorical variables will have hierarchical relationship. TYPE will be inner varaible and have value of either "TOTAL", "TCP", "UDP", or "ICMP". Another new categorical variable GROUP will be outer and have value of either "IPv4", "IPv6", or "IPv6t". Finally, PACKET_COUNTS will contains the original value. SIZE is retained.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# To do the hierarchical categories, we first separate data into subets,
+# perform the melt. Then finally combine them.
+
+# Select the subset to perform melt on.
+# Other uninteresting types are ignored intentionally.
+data4 <- subset(data, select=c("SIZE", "X.IPv4.", "TCP", "UDP", "ICMP"))
+
+# Rename the columns to be more readable
+names(data4) <- c("SIZE", "TOTAL", "TCP", "UDP", "ICMP")
+
+# Do the melt
+data4m <- melt(data4, id=c("SIZE"),
+               variable.name = 'TYPE', value.name='PACKET_COUNTS')
+
+# Create the new group variable
+data4m$GROUP = "IPv4"
+
+
+# The same step for the 2nd group
+data6 <- subset(data,
+                select=c("SIZE", "X.IPv6.", "TCP.1", "UDP.1", "ICMP6"))
+names(data6) <- c("SIZE", "TOTAL", "TCP", "UDP", "ICMP")
+data6m <- melt(data6, id=c("SIZE"),
+               variable.name = 'TYPE', value.name='PACKET_COUNTS')
+data6m$GROUP = "IPv6"
+
+# The same step for the 3rd group
+data6t <- subset(data,
+                 select=c("SIZE", "X.IPv6t.", "TCP.2", "UDP.2", "ICMP6.1"))
+names(data6t) <- c("SIZE", "TOTAL", "TCP", "UDP", "ICMP")
+data6tm <- melt(data6t, id=c("SIZE"),
+                variable.name = 'TYPE', value.name='PACKET_COUNTS')
+data6tm$GROUP = "IPv6t"
+
+
+# Finally, concatenate all three
+data_final <- rbind(data4m, data6m, data6tm)
+
+# convert from char to factor
+data_final$GROUP = factor(data_final$GROUP)
+
+names(data_final)
+```
+
+After the data wrangling, amount of variables are reduced to four. 
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sample_n(data_final, 5)
+```
+
+As the sample above, SIZE and PACKET_COUNTS retained most of the data. The 17 variables used to represent the type of packets are now identified by combination of two hierarchical, categorical variables: GROUP and TYPE.
+
+### Virsualization by Group of IPv4, IPV6, and IPv6t
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, GROUP=="IPv4"))  +
+  ggtitle("IPv4") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=TYPE), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=TYPE, color=TYPE),
+               method='lm')
+```
+
+Negative correlation between size and packet counts are consist with the single variable analysis. All types of packets has similar negative correlation although with some degree of difference.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, GROUP=="IPv4"), TYPE),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+Majority are TCP packets with a fraction of UDP packet, and far less of ICMP packets.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, GROUP=="IPv6"))  +
+  ggtitle("IPv6") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=TYPE), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=TYPE, color=TYPE),
+               method='lm')
+```
+
+IPv6 UDP appears to have different relationship than other types.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, GROUP=="IPv6"), TYPE),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+Majority are TCP packets with a fraction of UDP packet, and far less of ICMP packets.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, GROUP=="IPv6t"))  +
+  ggtitle("IPv6t") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=TYPE), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=TYPE, color=TYPE),
+               method='lm')
+```
+
+Although the amount of packet counts are far less, IPv6t appears to have similar structure as IPv4.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, GROUP=="IPv6t"), TYPE),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+Statistics show that IPv6t has far insignificant amount of counts compared to IPv4 and IPv6.
+
+
+### Visualization by Type pf packets of TOTAL, TCP, UDP, ICMP
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, TYPE=="TOTAL"))  +
+  ggtitle("TOTAL") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=GROUP), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=GROUP, color=GROUP),
+               method='lm')
+```
+
+Total amount of packets appear to have similar structure of slight negative correlation.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, TYPE=="TOTAL"), GROUP),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+Statistics shows that IPv4 far exceed IPv6, with IPv6t negligible.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, TYPE=="TCP"))  +
+  ggtitle("TCP") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=GROUP), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=GROUP, color=GROUP),
+               method='lm')
+```
+
+TCP has the same slight negative correlation.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, TYPE=="TCP"), GROUP),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+Same IPv4 >> IPv6 >> IPv6t in terms of counts.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, TYPE=="UDP"))  +
+  ggtitle("UDP") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=GROUP), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=GROUP, color=GROUP),
+               method='lm')
+```
+
+Both IPv4 UDP and IPv6 UDP is quite unique compared to others. More in the analysis section.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, TYPE=="UDP"), GROUP),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, TYPE=="ICMP"))  +
+  ggtitle("ICMP") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=GROUP), alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=GROUP, color=GROUP),
+               method='lm')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarize( 
+  group_by(subset(data_final, TYPE=="ICMP"), GROUP),
+  Mean=mean(PACKET_COUNTS),
+  Median=median(PACKET_COUNTS),
+  Sum=sum(PACKET_COUNTS))
+```
+
+
+# Bivariate Analysis (continued)
+
+### Analysis by group of IPv4, IPv6, and IPv6t
+- IPv4
+    - The log scale packet counts can tell there is a wide variation between TCP, UDP and ICMP. The sum of there three types of packets confirm they do have log10 scale differences. TCP is by far the leading types of packets, followed by UDP, with ICMP a distance third.
+    - For the negative correlation between packet counts and size, all types of packets do show negative correlation, however, with varying degree. ICMP has the largest negative correlation. Most of ICMP packets are small sizes. ICMP is a type of control packet and normally do not carry a lot of payload, so this makes a lot of sense. TCP is the main protocol today and all types of application with different charactersitics and different packet sizes ride on, so they tend to have less obviously negative correlation. UDP is interesting in that it has higher negative correlation than TCP, but also has a upward slop when of increasing packet counts when size is close and beyond 1000. This likely could be explained by two major types of UDP applications. First is DNS, which translates a domain name like www.udacity.com into an IP address. There are a lot of DNS traffic but their packet size tend to be small. Another major application of UDP is live video stream, which usually has larger packet size. The upward slope might be explained by the live video streaming application.
+    - Except for some other additional types of packets we choosed to include due to their small count, the negative correlation of total types of packets do make sense as it combine the near flat of TCP and more downward slope of UDP and ICMP, so the slope of TOTAL is more steep than TCP.
+    - Some interesting value of Medians. For example, median for ICMP is zero. This is because the packet counts value are indexed by packet size. Because of the type of ICMP is far less. So they tend to have similar packet size and the data indexed in this way will have a lot of zero when all packet size are listed.
+
+
+- IPv6
+    - The domination of TCP protocol appear to be more pronounced in IPv6. TCP is close to 50 times of UDP and ICMP traffic combined.
+    - TCP still represents the most amount of packets by far, with UDP the second, and ICMP a distance third.
+    - The negative correlation are similar to IPv4. However, for UDP, it represent a far steeper downslope. This might be that the live video stream application metioned above only use IPv4 but not IPv6. As a result, there is not many large sized packets for UDP in IPv6.
+    - Both UDP and ICMP have very small of zero median. Again this could be explained by not many different types of applications use these protocols so variety of packet size tend to be lacking.
+
+    
+- IPv6t
+    - The amounts of IPv6 tunnel is just too little for them to have meaning characteristic. Note that all meidan are zero. And the absolute amout of them are in the hundreds, dwarfed by the billion scale of IPv4 and and tens of million scale of IPv6.
+    
+
+
+### Analysis by type of TOTAL, TCP, UDP, and ICMP
+
+- TOTAL
+    - The domaniation of IPv4 is obvious when graphed by group. IPv6 is the second, and IPv6t very far distance 3rd.
+    - The negative correlation within each group appear to be similar with about the same steepness of linear regression line slope.
+
+- TCP
+    - The domaniation of IPv4 is obvious, followed by IPv6 and IPv6t very far distance 3rd.
+    - The negative correlation within each group appear to be similar with about the same steepness of linear regression line slope.
+
+- UDP
+    - The domaniation of IPv4 is obvious, followed by IPv6 and IPv6t very far distance 3rd.
+    - The negative correlation within group of IPv4 and IPv6t appear to be similar.
+    - UDP has very steep regression line. The lack of large size UDP packet could be explained as lack of use of live video streaming on top of IPv6 explained in previous section.
+    
+- ICMP
+    - The domaniation of IPv4 is obvious, followed by IPv6 and IPv6t very far distance 3rd.
+    - The negative correlation within each group appear to be similar with about the same steepness of linear regression line slope.
+    
+
+
+# Multivariate Plots Section
+
+This section attempt to combine all variables to discover the relationship between them.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  geom_point( data=subset(data_final, GROUP=="IPv4"),
+              aes(x=SIZE, y=PACKET_COUNTS, color=TYPE),
+              alpha=1/10, palette = "Greens" ) +
+  #scale_colour_brewer(palette = "Greens") +
+  geom_line( data=subset(data_final, GROUP=="IPv6"),
+             aes(x=SIZE, y=PACKET_COUNTS, color=TYPE),
+             alpha=1/10, palette = "Purples" ) +  
+  #scale_colour_brewer(palette = "Purples") +
+  scale_y_log10() +
+  scale_x_log10()
+```
+
+Plotting with point for one group (IPv4) and as line for another group (IPv6) show the scale of packet counts difference between.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  geom_point( data=data_final,
+              aes(x=SIZE, y=PACKET_COUNTS, color=TYPE, shape=GROUP),
+              alpha=1/3 ) +
+  scale_y_log10() +
+  scale_x_log10()
+```
+
+Use point plot for while colored by Type and shaped by Group.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  geom_point( data=data_final,
+              aes(x=SIZE, y=PACKET_COUNTS, color=GROUP, shape=TYPE),
+              alpha=1/3 ) +
+  scale_y_log10() +
+  scale_x_log10()
+```
+
+Reversed the color and shape to be colored by Group and shaped by Type. This has better visuability because of the scale of different between groups.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  geom_point( data=subset(data_final, TYPE!="TOTAL"),
+              aes(x=SIZE, y=PACKET_COUNTS, color=TYPE, shape=GROUP),
+              alpha=1/3 ) +
+  scale_y_log10() +
+  scale_x_log10()
+```
+
+Given that the Type of TOTAL is redundant information, it's just a sum of all types combined, remove it could make the plot less crowded. This is colored by Type and shaped by Group.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  geom_point( data=subset(data_final, TYPE!="TOTAL"),
+              aes(x=SIZE, y=PACKET_COUNTS, color=GROUP, shape=TYPE),
+              alpha=1/3 ) +
+  scale_y_log10() +
+  scale_x_log10()
+```
+
+Same with TOTAL type removed and then colored by Group and shaped by Type.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+data_final$GROUP_TYPE <- paste(data_final$GROUP, data_final$TYPE)
+data_final$GROUP_TYPE <- factor(data_final$GROUP_TYPE)
+sample_n(data_final,5)
+```
+
+Concatenated the two categorial variables Group and Type into one.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  geom_point( data=subset(data_final, TYPE!="TOTAL"),
+              aes(x=SIZE, y=PACKET_COUNTS, color=GROUP_TYPE),
+              alpha=1/5 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  scale_colour_brewer(palette = "Set1")
+```
+
+The plot with concatenated group and type variables.
+
+
+
+# Multivariate Analysis
+
+Three methods were attemped to plot two categorical variables on top of x, y scale two numeric variables.
+
+- Combination of dot and line plot:
+    - For this to be possible, IPv6t is ignored to allow mapping of IPv4 into dot and IPv6 into line plot.
+    - IPv4 show more packet counts than IPv6 in general
+    - line plot is less perfect than dot for showing internal relationship between x and y axis
+    
+- Different color and different shape of dot plot:
+    - The visual effect of color dominates the shape effect hence the different between shape tends to be ignored.
+    - Within each color, some clustering of shape can be observed
+    
+- Merge two categorical varaibles into one:
+    - Color is still produce better effect of grouping.
+    - Data presented by each color appear to has it's own charactertisic that is distinct than other color.
+
+
+# Final Plots and Summary
+
+Of all the graphing and analysis done, three major findings are summarized in different plots.
+
+
+### Plot One
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot()  +
+  ggtitle("Packet counts by size for all groups/types of packets") +
+  geom_point( data=subset(data_final, TYPE!="TOTAL"),
+              aes(x=SIZE, y=PACKET_COUNTS, color=GROUP_TYPE),
+              alpha=1/3 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  scale_color_manual(values=c("#ea6c1f", "#fd9e0c", "#edc374", # orange
+                              "#008000", "#a1cc3a", "#d3ffce", # green
+                              "#0a4f75", "#91bbe4", "#d7e4f5")) # blue  
+```
+
+
+### Description One
+
+By tuning the colors to be unique for each type and also has color family of orange for IPv4, green for IPv6, and blue for IPv6t, the unique characteristic of each type of packet for each group are visually more pronounced in a log10 scale graph of both packet size and packet counts.
+
+It can be visualized that packet counts of IPv4 is more than IPv6, and packet counts of IPv6 more than IPv6t. This is one a log scale so the difference is even bigger than the visualization shows.
+
+Also, each type of packet tends to less packet counts when the size is larger. Although the reduction in packet counts are different for each type.
+
+
+### Plot Two
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, TYPE=="TOTAL"))  +
+  ggtitle("Packet counts by size for IPv4, IPv6, and IPv6t group") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=GROUP),
+              alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  scale_color_manual(values=c("#fd9e0c", # orange
+                              "#a1cc3a", # green
+                              "#91bbe4")) +     # blue  
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=GROUP, color=GROUP),
+               method='lm')
+```
+
+### Description Two
+
+The two majority of the findings can be more easily vitualized by showing the combined packet counts value for each group of IPv4, IPv6, and IPv6t.
+
+- First, the difference betwen packet counts for each group is huge. Note that the graph is on log10 scale.
+- Second, all of the groups show a negative correlation between packet counts and packet size. Intuitively this makes senses, as if assuming the amount of data to be transmitted is the same, the larger the packet size, the less amount of packets are need to complete the transfer of the same amount of data.
+
+
+### Plot Three
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=subset(data_final, TYPE=="UDP"))  +
+  ggtitle("UDP packet counts by size for IPv4, IPv6, and IPv6t") +
+  geom_point( aes(x=SIZE, y=PACKET_COUNTS, color=GROUP),
+              alpha=1/10 ) +
+  scale_y_log10() +
+  scale_x_log10() +
+  scale_color_manual(values=c("#fd9e0c", # orange
+                              "#a1cc3a", # green
+                              "#91bbe4")) +     # blue   
+  geom_smooth( aes(x=SIZE, y=PACKET_COUNTS, group=GROUP, color=GROUP),
+               method='lm')
+```
+
+
+### Description Three
+
+The negative correlation between packet counts and packet sizes does not some outliers that are different. Specifically the UDP packets for IPv4 and IPv6 both show a bit different behavior. For IPv4, the negative correlaction was broken a little when the packet size is close and beyound 1000. Implying a special type of application using UDP with large packet size is present in IPv4. Interesting, this type of packet might be absent from IPv6. Void of application with large size UDP packet, the amount large size UDP packets dropped even more significantly in IPv6.
+
+UDP has major application in DNS which uses small packet size. It also has a major application in live video streaming. Video streaming tends to use large packet for efficiency of transmission. This observation implies that it could be that live video streaming application is present in IPv4 but not IPv6. Additional data not available in this study will be need to confirm this suspicion.
+
+
+# Reflection
+
+Exploratory Data Analysis is fun in that you never know what you will find until the end of the process. Whether the data is useful or enough to provide insights. Through the process, we found the following:
+
+- We started with 18 variables but found there are internal relationship between them and the presetntation of data is better served by metling them into total of 4 variables.
+- Log scale was essential for both packet counts and packet sizes. There are small amount of outliers make the viralization difficult to analyze without log scaling.
+- We didn't know whether there will be some insights hidden in the data. But by some wrangling, scaling, and organizing of data, we are able to find some relationships.
+- Depends on the data set, multiple variables could be difficult to visualized. At time the visualization could be too noisy to gain insights. However, it might provides a slight structure to find what could be the area to focus on. In other word, multiple variables might be a starting point for determining which area we want to do further research.
+
+
+
+
+# Reference
+
+This study references the various materials publicablly available on the Internet.
+
+- The dataset is provided by CAIDA as [Trace Statistics for CAIDA Passive OC48 and OC192 Traces](http://www.caida.org/data/passive/trace_stats/). There are multiple data in this category. Specifically, we used Chicago (dirA), 2016-04-06 data. File name: equinix-chicago.dirA.20160406-130000.UTC.df.txt. This file is included in the report.
+- The beautiful colors from the final section were chosen from [Color hex value](http://www.color-hex.com/)
+- Method to use both shapes and color in ggplot can be find in this [STHDA article](http://www.sthda.com/english/wiki/ggplot2-point-shapes).
+- This [Quora article](https://www.quora.com/Why-does-Netflix-use-TCP-and-not-UDP-for-its-streaming-video) discuss about the streaming video use of TCP vs UDP.
+- The melt function on R was explained in this [Quick-R article](https://www.statmethods.net/management/reshape.html).
+- Generate a histogram for each column on stackoverflow [article](https://stackoverflow.com/questions/35372365/how-do-i-generate-a-histogram-for-each-column-of-my-table).
+- Drop a column from dataframe on stackoverflow [article](https://stackoverflow.com/questions/4605206/drop-data-frame-columns-by-name)
+
+
+
